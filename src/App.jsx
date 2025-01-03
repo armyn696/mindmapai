@@ -9,9 +9,14 @@ function App() {
   const [edges, setEdges] = useState([]);
   const [error, setError] = useState('');
   const [isInputExpanded, setIsInputExpanded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleGenerate = async () => {
     try {
+      setIsLoading(true);
+      setError('');
+      
+      console.log('Sending request to Netlify function...');
       const response = await fetch('/.netlify/functions/generate', {
         method: 'POST',
         headers: {
@@ -20,10 +25,16 @@ function App() {
         body: JSON.stringify({ text: inputText }),
       });
       
+      console.log('Response received:', response.status);
       const data = await response.json();
+      console.log('Response data:', data);
       
       if (!response.ok) {
-        throw new Error(data.error || 'Network response was not ok');
+        throw new Error(data.error || data.details || 'Network response was not ok');
+      }
+      
+      if (!data.flow || !data.flow.nodes || !data.flow.edges) {
+        throw new Error('Invalid response format from server');
       }
       
       setNodes(data.flow.nodes);
@@ -33,6 +44,10 @@ function App() {
     } catch (error) {
       console.error('Error:', error);
       setError(error.message);
+      setNodes([]);
+      setEdges([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -52,9 +67,23 @@ function App() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder="متن خود را اینجا وارد کنید..."
+              disabled={isLoading}
             />
-            <button onClick={handleGenerate}>تولید نمودار</button>
-            {error && <div className="error">{error}</div>}
+            <button 
+              onClick={handleGenerate} 
+              disabled={isLoading || !inputText.trim()}
+            >
+              {isLoading ? 'در حال پردازش...' : 'تولید نمودار'}
+            </button>
+            {error && (
+              <div className="error">
+                <p>خطا: {error}</p>
+                <details>
+                  <summary>جزئیات بیشتر</summary>
+                  <pre>{JSON.stringify(error, null, 2)}</pre>
+                </details>
+              </div>
+            )}
           </div>
         </div>
         <MindMap nodes={nodes} edges={edges} />

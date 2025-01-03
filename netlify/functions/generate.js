@@ -242,8 +242,11 @@ async function generateMermaidCode(inputText) {
 }
 
 exports.handler = async function(event, context) {
+  console.log('Function started', { httpMethod: event.httpMethod });
+  
   // اضافه کردن پاسخ به درخواست OPTIONS برای CORS
   if (event.httpMethod === 'OPTIONS') {
+    console.log('Handling OPTIONS request');
     return {
       statusCode: 200,
       headers: {
@@ -257,6 +260,7 @@ exports.handler = async function(event, context) {
   }
 
   if (event.httpMethod !== 'POST') {
+    console.log('Invalid HTTP method:', event.httpMethod);
     return {
       statusCode: 405,
       headers: {
@@ -268,15 +272,21 @@ exports.handler = async function(event, context) {
   }
 
   try {
+    console.log('Checking API key...');
     // اطمینان از وجود API key
     if (!process.env.GEMINI_API_KEY) {
+      console.error('GEMINI_API_KEY is not configured');
       throw new Error('GEMINI_API_KEY is not configured');
     }
+    console.log('API key is configured');
 
     let requestBody;
     try {
+      console.log('Parsing request body...');
       requestBody = JSON.parse(event.body);
+      console.log('Request body parsed successfully');
     } catch (e) {
+      console.error('Error parsing request body:', e);
       return {
         statusCode: 400,
         headers: {
@@ -288,8 +298,10 @@ exports.handler = async function(event, context) {
     }
 
     const { text } = requestBody;
+    console.log('Input text received:', text ? 'Yes' : 'No');
     
     if (!text) {
+      console.error('No input text provided');
       return {
         statusCode: 400,
         headers: {
@@ -300,16 +312,25 @@ exports.handler = async function(event, context) {
       };
     }
 
+    console.log('Generating Mermaid code...');
     const mermaidCode = await generateMermaidCode(text);
+    console.log('Mermaid code generated:', mermaidCode ? 'Yes' : 'No');
+    
     if (!mermaidCode) {
+      console.error('Failed to generate Mermaid code');
       throw new Error('Failed to generate Mermaid code');
     }
 
+    console.log('Converting to React Flow format...');
     const flowData = mermaidToReactflow(mermaidCode);
+    console.log('Flow data generated:', flowData ? 'Yes' : 'No');
+    
     if (!flowData || !flowData.nodes || !flowData.edges) {
+      console.error('Failed to convert to React Flow format');
       throw new Error('Failed to convert to React Flow format');
     }
 
+    console.log('Sending successful response...');
     return {
       statusCode: 200,
       headers: {
@@ -323,6 +344,7 @@ exports.handler = async function(event, context) {
     };
   } catch (error) {
     console.error('Error in generate function:', error);
+    console.error('Error stack:', error.stack);
     return {
       statusCode: 500,
       headers: {
@@ -331,7 +353,7 @@ exports.handler = async function(event, context) {
       },
       body: JSON.stringify({ 
         error: error.message || 'An unexpected error occurred',
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        details: error.stack
       })
     };
   }
