@@ -242,31 +242,79 @@ async function generateMermaidCode(inputText) {
 }
 
 exports.handler = async function(event, context) {
+  // اضافه کردن پاسخ به درخواست OPTIONS برای CORS
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Max-Age': '86400'
+      },
+      body: ''
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ error: 'Method Not Allowed' })
     };
   }
 
   try {
-    const { text } = JSON.parse(event.body);
+    // اطمینان از وجود API key
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is not configured');
+    }
+
+    let requestBody;
+    try {
+      requestBody = JSON.parse(event.body);
+    } catch (e) {
+      return {
+        statusCode: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ error: 'Invalid JSON in request body' })
+      };
+    }
+
+    const { text } = requestBody;
     
     if (!text) {
       return {
         statusCode: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ error: 'متن ورودی الزامی است' })
       };
     }
 
     const mermaidCode = await generateMermaidCode(text);
+    if (!mermaidCode) {
+      throw new Error('Failed to generate Mermaid code');
+    }
+
     const flowData = mermaidToReactflow(mermaidCode);
+    if (!flowData || !flowData.nodes || !flowData.edges) {
+      throw new Error('Failed to convert to React Flow format');
+    }
 
     return {
       statusCode: 200,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         mermaid: mermaidCode,
@@ -274,10 +322,17 @@ exports.handler = async function(event, context) {
       })
     };
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in generate function:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message })
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ 
+        error: error.message || 'An unexpected error occurred',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      })
     };
   }
 }; 
